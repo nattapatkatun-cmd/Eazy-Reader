@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eazy Reader — แอปอ่านหนังสือ</title>
+<meta name="description" content="แอปอ่าน EPUB, PDF, การ์ตูน และรูปภาพ พร้อมเอฟเฟกต์พลิกหน้าและโหมดถนอมสายตา ทำงานออฟไลน์ได้">
+<meta name="theme-color" content="#f8f1e3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Eazy Reader">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="lib">
+  <header class="lib-head">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><h1>Eazy Reader</h1></div>
+    <div class="row">
+      <button class="ibtn" id="btn-eye" title="การแสดงผลและถนอมสายตา" aria-label="การแสดงผลและถนอมสายตา"></button>
+      <button class="btn" id="btn-add"><span id="add-ic"></span>เพิ่ม</button>
+    </div>
+  </header>
+  <div id="lib-grid" class="lib-grid"></div>
+  <div id="lib-empty" class="empty" hidden>
+    <div class="empty-art" aria-hidden="true"></div>
+    <h2>ชั้นหนังสือยังว่างอยู่</h2>
+    <p>เพิ่มไฟล์ EPUB, PDF, TXT, การ์ตูน CBZ/CBR หรือรูปภาพ<br>ไฟล์จะถูกเก็บไว้ในเครื่องนี้เท่านั้น ไม่มีการอัปโหลดไปที่ใด</p>
+    <button class="btn big" id="btn-add2">เพิ่มหนังสือเล่มแรก</button>
+  </div>
+</main>
+
+<section id="reader" hidden>
+  <div id="stage">
+    <div class="layer" id="layerA"></div>
+    <div class="layer" id="layerB"></div>
+    <canvas id="flipcv"></canvas>
+    <div id="scroller"></div>
+  </div>
+  <div id="mini" aria-hidden="true"></div>
+  <header id="topbar" class="bar">
+    <button class="ibtn" id="btn-back" title="กลับชั้นหนังสือ" aria-label="กลับชั้นหนังสือ"></button>
+    <div id="r-title" class="r-title"></div>
+    <button class="ibtn" id="btn-bm" title="คั่นหน้านี้" aria-label="คั่นหน้านี้"></button>
+  </header>
+  <footer id="botbar" class="bar">
+    <div class="seek"><input type="range" id="seek" min="0" max="1000" value="0" aria-label="เลื่อนไปยังตำแหน่ง"><div id="r-label" class="r-label"></div></div>
+    <nav id="tools" class="tools"></nav>
+  </footer>
+  <div id="annbar" class="floatbar top" hidden></div>
+  <div id="selbar" class="floatbar bottom" hidden></div>
+  <div id="ttsbar" class="floatbar bottom" hidden></div>
+</section>
+
+<section id="grid" hidden></section>
+<div id="drop" hidden>วางไฟล์ที่นี่เพื่อเพิ่มเข้าชั้นหนังสือ</div>
+<div id="eye-warm" aria-hidden="true"></div>
+<div id="eye-dim" aria-hidden="true"></div>
+<div id="sheet"></div>
+<div id="busy" hidden><div class="busy-box"><div class="spin"></div><div id="busy-msg"></div></div></div>
+<div id="toast" role="status"></div>
+<input type="file" id="in-files" multiple hidden>
+<input type="file" id="in-images" multiple accept="image/*" hidden>
+<input type="file" id="in-folder" webkitdirectory multiple hidden>
+<input type="file" id="in-merge" multiple accept="application/pdf,image/*,.pdf" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
