@@ -15,7 +15,7 @@
 2. เปิด GitHub Pages: Deploy from a branch → `main` / `(root)`
    (`gh api -X POST repos/<owner>/eazy-reader/pages -f "source[branch]=main" -f "source[path]=/"`)
 3. ตรวจ `https://<owner>.github.io/eazy-reader/` ว่าโหลดได้และ service worker ลงทะเบียนสำเร็จ
-4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v3`)
+4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v4`)
 
 ทุก path ในแอปเป็นแบบ relative จึงใช้ได้ทั้งที่ root โดเมนและ sub-path
 
@@ -50,4 +50,4 @@
 
 - ไม่รองรับไฟล์ติด DRM, MOBI/AZW3, EPUB fixed-layout, EPUB ตัวอักษรแนวตั้ง
 - แก้ข้อความเดิมใน PDF ไม่ได้ · PDF ตั้งรหัสผ่านส่งออกไม่ได้ · ค้นหาใน PDF ไปที่หน้าแต่ไม่ไฮไลต์คำ
-- iPhone เลือกทั้งโฟลเดอร์ไม่ได้ · ภาพย่อในมุมมอง "ทุกหน้า" ไม่แสดงลายขีดเขียน
+- iPhone เลือกทั้งโฟลเดอร์ไม่ได้ และไม่รองรับ Fullscreen API (ปุ่มเต็มจอถูกซ่อน ใช้ "เพิ่มไปยังหน้าจอโฮม" แทน) · ภาพย่อในมุมมอง "ทุกหน้า" ไม่แสดงลายขีดเขียน

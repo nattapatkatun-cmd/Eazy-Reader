@@ -13,7 +13,7 @@ const DEF = {
   theme: 'cream', customBg: '#f3ead2', customFg: '#33291c', warm: 0, dim: 0, contrast: 100, gray: 0, invert: false, tint: false,
   font: 'sans', size: 19, lh: 1.75, margin: 22, justify: false, pubCss: true,
   effect: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'curl',
-  breakMin: 20, wake: true, ttsRate: 1, presets: [],
+  breakMin: 20, wake: true, fullscreen: false, ttsRate: 1, presets: [],
 };
 const THEMES = {
   white: { name: 'ขาว', bg: '#ffffff', fg: '#1c1c1e' },
@@ -217,9 +217,32 @@ addEventListener('dragleave', () => { dragN = Math.max(0, dragN - 1); if (!dragN
 addEventListener('dragover', (e) => e.preventDefault());
 addEventListener('drop', async (e) => { e.preventDefault(); dragN = 0; $('#drop').hidden = true; if (reader.hidden && e.dataTransfer) doImport(await filesFromDrop(e.dataTransfer)); });
 
+/* ---------- เต็มจอ (Fullscreen API: คอม, Android, iPad · iPhone ไม่รองรับ ใช้ "เพิ่มไปยังหน้าจอโฮม" แทน) ---------- */
+const docEl = document.documentElement;
+const canFS = !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen);
+const isFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function enterFS() {
+  if (!canFS || isFS()) return;
+  // ต้องเรียกระหว่างที่ผู้ใช้เพิ่งแตะ ไม่งั้นเบราว์เซอร์ปฏิเสธ (ไม่เป็นไร แค่ไม่เต็มจอ)
+  try { const r = docEl.requestFullscreen ? docEl.requestFullscreen({ navigationUI: 'hide' }) : docEl.webkitRequestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch { /* ไม่อนุญาต */ }
+}
+function exitFS() {
+  if (!isFS()) return;
+  try { const r = document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen(); if (r && r.catch) r.catch(() => {}); } catch { /* ออกแล้ว */ }
+}
+const toggleFS = () => (isFS() ? exitFS() : enterFS());
+function fsChanged() {
+  const on = isFS(), b = $('#btn-fs');
+  b.replaceChildren(icon(on ? 'shrink' : 'expand'));
+  b.title = on ? 'ออกจากเต็มจอ' : 'เต็มจอ'; b.setAttribute('aria-label', b.title);
+}
+$('#btn-fs').hidden = !canFS; $('#btn-fs').onclick = toggleFS; fsChanged();
+document.addEventListener('fullscreenchange', fsChanged); document.addEventListener('webkitfullscreenchange', fsChanged);
+
 /* ---------- เปิด / ปิดเล่ม ---------- */
 let ignorePop = false, wakeLock = null, activeSec = 0;
 async function openBook(id) {
+  if (S.fullscreen) enterFS(); // ก่อน await แรก เพื่อให้ยังนับเป็นการแตะของผู้ใช้
   if (app.view) { await save(); teardown(); }
   busy('กำลังเปิด…');
   try {
@@ -265,6 +288,7 @@ function teardown() {
   app.pager.setView(null);
   app.view = null; app.meta = null;
   reader.hidden = true; $('#lib').hidden = false;
+  exitFS();
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   renderLib();
 }
@@ -339,6 +363,7 @@ function onKey(e) {
   else if (k === 'ArrowLeft') ltr ? v.prev() : v.next();
   else if (k === 'PageDown' || k === ' ' || (k === 'ArrowDown' && v.mode === 'paged')) v.next();
   else if (k === 'PageUp' || (k === 'ArrowUp' && v.mode === 'paged')) v.prev();
+  else if (k === 'f' || k === 'F') toggleFS();
   else if (k === 'Escape') { if (annOn) setAnnot(false); else if (reader.classList.contains('ui')) closeReader(false); else toggleUI(); }
   else return;
   e.preventDefault();
@@ -556,7 +581,9 @@ function displaySheet() {
     }
     secs.push(h('div', { class: 'sec' }, h('h3', {}, 'สุขภาพสายตา'),
       field('เตือนพักสายตา', seg([[0, 'ปิด'], [20, '20 นาที'], [30, '30 นาที'], [45, '45 นาที']], S.breakMin, (k) => { S.breakMin = k; activeSec = 0; saveS(); })),
-      toggle('เปิดหน้าจอค้างไว้ขณะอ่าน', S.wake, (x) => { S.wake = x; saveS(); if (x) lockWake(); else if (wakeLock) wakeLock.release().catch(() => {}); })));
+      toggle('เปิดหน้าจอค้างไว้ขณะอ่าน', S.wake, (x) => { S.wake = x; saveS(); if (x) lockWake(); else if (wakeLock) wakeLock.release().catch(() => {}); }),
+      canFS ? toggle('เปิดหนังสือแบบเต็มจออัตโนมัติ', S.fullscreen, (x) => { S.fullscreen = x; saveS(); if (app.view) { if (x) enterFS(); else exitFS(); } }) : null,
+      !canFS && isIOS && !navigator.standalone ? h('p', { class: 'note' }, 'iPhone ไม่รองรับโหมดเต็มจอในเว็บ · กดแชร์ → "เพิ่มไปยังหน้าจอโฮม" แล้วเปิดจากไอคอน จะไม่มีแถบของ Safari') : null));
     body.replaceChildren(...secs);
   };
   draw();
