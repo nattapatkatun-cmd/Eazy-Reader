@@ -200,6 +200,7 @@ export async function bookFile(meta, pick) {
 /* ---------- เล่มที่ไม่เก็บสำเนา ---------- */
 const live = new Map(); // id → File | File[] ที่ได้มาแล้วในรอบนี้ ไม่ต้องถามซ้ำจนกว่าจะรีโหลดหน้า
 export const forget = (id) => live.delete(id);
+export const forgetAll = () => live.clear();
 const aborted = () => Object.assign(new Error('ยกเลิกแล้ว'), { name: 'AbortError' });
 
 async function resolveRef(meta, pick) {

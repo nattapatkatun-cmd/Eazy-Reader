@@ -56,6 +56,10 @@ export const db = {
     await tx('files', 'readwrite', (s) => s.delete(id));
     await this.delPages(id);
   },
+  // ลบหนังสือทุกเล่ม (การตั้งค่าธีม/ถนอมสายตาอยู่ใน localStorage จึงไม่ถูกลบ)
+  async clearBooks() {
+    for (const st of ['books', 'files', 'pages', 'handles']) await tx(st, 'readwrite', (s) => s.clear());
+  },
   async delPages(id) {
     await tx('pages', 'readwrite', (s) => s.delete(IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER])));
   },

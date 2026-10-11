@@ -27,6 +27,7 @@ h1,h2,p{margin:0}
 .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
 .btn.danger{background:var(--danger);color:#fff}
 :root[data-dark="1"] .btn.danger{color:#3b0d0a}
+.btn.danger-text{color:var(--danger);align-self:flex-start}
 .btn:disabled{opacity:.4}
 .ibtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:50%;background:transparent;flex:none}
 .ibtn:active,.btn:active,.tool:active{opacity:.6}

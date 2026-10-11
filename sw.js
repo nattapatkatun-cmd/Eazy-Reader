@@ -1,6 +1,6 @@
 // Service worker: ทำให้แอปเปิดได้แม้ไม่มีอินเทอร์เน็ต
 // เมื่อแก้ไฟล์แอปแล้ว deploy ใหม่ ให้เปลี่ยนเลขเวอร์ชันด้านล่าง เพื่อล้างแคชเก่า
-const VERSION = 'eazy-reader-v2';
+const VERSION = 'eazy-reader-v3';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/db.js', 'js/importer.js', 'js/sources.js', 'js/flip.js', 'js/fixedview.js', 'js/reflowview.js', 'js/pdfedit.js', 'js/tts.js',

@@ -15,7 +15,7 @@
 2. เปิด GitHub Pages: Deploy from a branch → `main` / `(root)`
    (`gh api -X POST repos/<owner>/eazy-reader/pages -f "source[branch]=main" -f "source[path]=/"`)
 3. ตรวจ `https://<owner>.github.io/eazy-reader/` ว่าโหลดได้และ service worker ลงทะเบียนสำเร็จ
-4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v2`)
+4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v3`)
 
 ทุก path ในแอปเป็นแบบ relative จึงใช้ได้ทั้งที่ root โดเมนและ sub-path
 

@@ -1,7 +1,7 @@
 // Eazy Reader — ตัวประสานงานหลัก: ชั้นหนังสือ, หน้าจออ่าน, การตั้งค่า, เครื่องมือ
 import { $, h, icon, ibtn, toast, openSheet, closeSheet, sheetOpen, ask, confirmBox, debounce, clamp, uid, hexLum, fmtSize, saveBlob, isIOS } from './util.js';
 import { db } from './db.js';
-import { importFiles, openSource, filesFromDrop, bookFile, forget, canDropCopy, dropCopy, keepCopy, canPickFiles, canPickDir, pickFiles, pickFolder } from './importer.js';
+import { importFiles, openSource, filesFromDrop, bookFile, forget, forgetAll, canDropCopy, dropCopy, keepCopy, canPickFiles, canPickDir, pickFiles, pickFolder } from './importer.js';
 import { Pager } from './flip.js';
 import { FixedView } from './fixedview.js';
 import { ReflowView, FONTS, HL_COLORS } from './reflowview.js';
@@ -193,9 +193,20 @@ function addSheet() {
     big('image', 'รูปภาพหลายรูป', 'เลือกหลายรูปพร้อมกัน รวมเป็นหนึ่งอัลบั้ม', () => $('#in-images').click()),
     isIOS ? null : big('folder', 'ทั้งโฟลเดอร์', 'แต่ละโฟลเดอร์ย่อยที่มีรูปจะกลายเป็นหนึ่งเล่ม', canPickDir ? viaApi(pickFolder) : () => $('#in-folder').click()),
     h('p', { class: 'note' }, 'ทุกครั้งที่นำเข้า เลือกได้ว่าจะเก็บสำเนาไว้ในแอปหรือไม่ · ไฟล์ไม่ถูกส่งออกจากเครื่อง · ไฟล์ที่ติดระบบป้องกันการคัดลอก (DRM) จากร้านหนังสือจะเปิดไม่ได้'),
-    usage));
+    usage, clearAll));
   try { navigator.storage.estimate().then((e) => { usage.textContent = `ข้อมูลของแอปใช้พื้นที่ในเครื่องอยู่ ${fmtSize(e.usage || 0)}`; }).catch(() => {}); } catch { /* ไม่รองรับ */ }
+  db.books().then((bs) => { clearAll.hidden = !bs.length; }).catch(() => {});
 }
+const clearAll = h('button', { class: 'btn ghost danger-text', hidden: true, onclick: async () => {
+  const bs = await db.books();
+  if (!bs.length) return;
+  const copied = bs.filter((b) => !isRefBook(b)).reduce((a, b) => a + (b.size || 0), 0);
+  if (!await confirmBox('ลบหนังสือทั้งหมด?', `หนังสือ ${bs.length} เล่ม รวมถึงสำเนาไฟล์ในแอป (ประมาณ ${fmtSize(copied)}) หน้าที่อ่านถึง ที่คั่น ไฮไลต์ และโน้ตทั้งหมดจะถูกลบ และกู้คืนไม่ได้ · ไฟล์ต้นฉบับในเครื่องคุณและการตั้งค่าธีม/ถนอมสายตาไม่ถูกแตะต้อง`, 'ลบทั้งหมด')) return;
+  busy('กำลังลบ…');
+  try { await db.clearBooks(); forgetAll(); toast(`ลบหนังสือ ${bs.length} เล่มแล้ว`); }
+  catch (e) { toast(e.message || 'ลบไม่สำเร็จ', 4000); }
+  finally { busy(''); renderLib(); }
+} }, 'ลบหนังสือทั้งหมด');
 for (const id of ['in-files', 'in-images', 'in-folder']) $('#' + id).addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; doImport(f); });
 $('#btn-add').prepend(icon('plus', 18)); $('#btn-add').onclick = addSheet; $('#btn-add2').onclick = addSheet;
 $('#btn-eye').append(icon('eye')); $('#btn-eye').onclick = () => displaySheet();
