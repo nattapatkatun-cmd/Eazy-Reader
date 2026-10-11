@@ -6,7 +6,7 @@
 ## สถานะ
 
 - โค้ดครบและทดสอบด้วย Chromium (Playwright) ที่ขนาดจอมือถือ 390×844, จอพับ 820×720, เดสก์ท็อป 1180×780 ผ่านทั้งหมด
-- **ยังไม่ได้ deploy** และยังไม่ได้ทดสอบบน iPhone Safari / Galaxy Fold เครื่องจริง
+- push ขึ้น `main` แล้ว (repo `nattapatkatun-cmd/Eazy-Reader`) แต่ยังต้องเปิด GitHub Pages ใน Settings เอง (proxy ของ cloud session เรียก Pages API ไม่ได้) · ยังไม่ได้ทดสอบบน iPhone Safari / Galaxy Fold เครื่องจริง
 - การอ่านออกเสียงยังไม่ได้ยืนยันว่ามีเสียงออกจริง (สภาพแวดล้อมทดสอบไม่มีเสียงติดตั้ง)
 
 ## งานถัดไป: deploy
@@ -15,7 +15,7 @@
 2. เปิด GitHub Pages: Deploy from a branch → `main` / `(root)`
    (`gh api -X POST repos/<owner>/eazy-reader/pages -f "source[branch]=main" -f "source[path]=/"`)
 3. ตรวจ `https://<owner>.github.io/eazy-reader/` ว่าโหลดได้และ service worker ลงทะเบียนสำเร็จ
-4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v1`)
+4. ทุกครั้งที่แก้โค้ดแล้ว deploy ใหม่ ให้เปลี่ยน `VERSION` ใน `sw.js` (ตอนนี้ `eazy-reader-v2`)
 
 ทุก path ในแอปเป็นแบบ relative จึงใช้ได้ทั้งที่ root โดเมนและ sub-path
 
@@ -29,7 +29,7 @@
 - `js/reflowview.js` — ตัวอ่านข้อความไหล (EPUB, TXT) ใช้ iframe 2 ตัว + CSS columns
 - `js/flip.js` — `Pager`: pointer events, ซูม, เอฟเฟกต์ม้วนกระดาษ (clip-path + canvas)
 - `js/pdfedit.js` — วาดลายขีดเขียน, สร้าง PDF ใหม่ด้วย pdf-lib
-- `js/tts.js`, `js/db.js` — อ่านออกเสียง, IndexedDB (`eazyreader`: stores `books`, `files`, `pages`)
+- `js/tts.js`, `js/db.js` — อ่านออกเสียง, IndexedDB (`eazyreader` v2: stores `books`, `files`, `pages`, `handles`)
 - `vendor/` — pdf.js 6.2.108 (legacy build), pdf-lib 1.17.1, zip.js, libarchive.js 2.0.2 · `fonts/` — Sarabun, Noto Serif Thai (WOFF)
 
 ## การตัดสินใจสำคัญ
@@ -38,6 +38,12 @@
 - ตำแหน่งอ่านของ EPUB/TXT เก็บเป็น `{ch, off}` (ลำดับตัวอักษรในบท) จึงคงที่เมื่อเปลี่ยนขนาดฟอนต์หรือหมุนจอ
 - PDF: ลำดับ/การหมุนหน้าเก็บเป็นรายการเสมือน `meta.pdf.order = [{s, r}]` ไม่แก้ไฟล์จนกว่าจะส่งออกหรือรวมไฟล์ · ลายขีดเขียนเก็บเป็นพิกัด 0..1 ต่อหน้าต้นฉบับ `meta.pdf.annots[s]`
 - CBR/RAR/7z แตกเป็นอัลบั้ม (รูปทีละหน้าใน store `pages`) ตอนนำเข้า · CBZ เก็บไฟล์เดิมและอ่านทีละรูป
+- ตอนนำเข้าถามทุกครั้ง: เก็บสำเนา หรือไม่เก็บไฟล์ → `meta.store` = `copy` (เล่มเก่าไม่มีค่า = copy) / `link` / `none`
+  - `link`: เก็บ FileSystemHandle ใน store `handles` (`{f}` ไฟล์เดี่ยว หรือ `{d, path}` โฟลเดอร์ราก + โฟลเดอร์ย่อย) ได้เฉพาะเบราว์เซอร์ที่มี `showOpenFilePicker`/`showDirectoryPicker` (Chrome/Edge คอม, Chrome Android 132+) · iOS ไม่มี
+  - `none`: ตอนเปิดให้เลือกไฟล์ใหม่ จับคู่ด้วย `meta.src` (`{t:'file', name, size}` หรือ `{t:'imgs', dir, names, sizes}`)
+  - ไฟล์ที่ได้มาแล้วในรอบนี้แคชไว้ใน `live` (importer.js) · ลิงก์ที่ไฟล์หายจะถูกลดเป็น `none` · CBR/7z แบบไม่เก็บไฟล์จะแตกใหม่ทุกครั้งที่เปิด
+  - รวมไฟล์ PDF แล้วเล่มนั้นเปลี่ยนเป็น `copy` + `meta.merged` (ห้ามลบสำเนา เพราะไม่มีไฟล์ต้นฉบับในเครื่อง)
+  - อัลบั้มจากการเลือกรูปทีละไฟล์ลิงก์ไม่ได้ (ต้องขอสิทธิ์ทีละไฟล์) → เป็น `none`
 - `window.__eazy` เปิด `app`, `db`, `importFiles`, `openBook`, `tts` ไว้สำหรับทดสอบ
 
 ## ข้อจำกัดที่รู้อยู่

@@ -1,7 +1,7 @@
 // Eazy Reader — ตัวประสานงานหลัก: ชั้นหนังสือ, หน้าจออ่าน, การตั้งค่า, เครื่องมือ
 import { $, h, icon, ibtn, toast, openSheet, closeSheet, sheetOpen, ask, confirmBox, debounce, clamp, uid, hexLum, fmtSize, saveBlob, isIOS } from './util.js';
 import { db } from './db.js';
-import { importFiles, openSource, filesFromDrop } from './importer.js';
+import { importFiles, openSource, filesFromDrop, bookFile, forget, canDropCopy, dropCopy, keepCopy, canPickFiles, canPickDir, pickFiles, pickFolder } from './importer.js';
 import { Pager } from './flip.js';
 import { FixedView } from './fixedview.js';
 import { ReflowView, FONTS, HL_COLORS } from './reflowview.js';
@@ -74,7 +74,7 @@ async function renderLib() {
     const cover = b.cover
       ? h('div', { class: 'cover' }, h('img', { src: b.cover, alt: '', loading: 'lazy' }))
       : h('div', { class: 'cover gen', style: { background: GEN[(b.title.codePointAt(0) || 0) % GEN.length] } }, b.title.slice(0, 60));
-    cover.append(h('span', { class: 'badge' }, KIND[b.kind] || b.kind));
+    cover.append(h('span', { class: 'badge' }, (KIND[b.kind] || b.kind) + (isRefBook(b) ? ' · ไม่เก็บไฟล์' : '')));
     if (b.progress > 0) cover.append(h('div', { class: 'prog' }, h('i', { style: { width: Math.round(b.progress * 100) + '%' } })));
     const sub = b.progress >= 0.999 ? 'อ่านจบแล้ว' : b.progress > 0 ? `อ่านแล้ว ${Math.round(b.progress * 100)}%` : b.n ? `${b.n} หน้า` : b.author || 'ยังไม่ได้อ่าน';
     return h('div', { class: 'card' },
@@ -83,27 +83,97 @@ async function renderLib() {
       ibtn('more', 'ตัวเลือกของ ' + b.title, () => bookMenu(b), 'card-more'));
   }));
 }
+const isRefBook = (b) => b.store === 'link' || b.store === 'none';
 function bookMenu(b) {
   const mins = Math.round((b.time || 0) / 60);
+  const where = b.store === 'link' ? 'ไม่ได้เก็บไฟล์ไว้ในแอป · เปิดจากไฟล์เดิมในเครื่อง'
+    : b.store === 'none' ? 'ไม่ได้เก็บไฟล์ไว้ในแอป · ต้องเลือกไฟล์ทุกครั้งที่เปิด'
+      : `เก็บสำเนาไว้ในแอป ใช้พื้นที่ ${fmtSize(b.size || 0)}`;
+  const big = (ic, t, s, fn) => h('button', { class: 'bigbtn', onclick: fn }, icon(ic, 26), h('div', {}, h('b', {}, t), s ? h('small', {}, s) : null));
   openSheet(b.title, h('div', { class: 'col' },
     h('p', { class: 'note' }, `${KIND[b.kind] || b.kind} · ${fmtSize(b.size || 0)}${b.author ? ' · ' + b.author : ''}${mins ? ` · อ่านไปแล้ว ${mins} นาที` : ''}`),
+    h('p', { class: 'note' }, where),
+    canDropCopy(b) ? big('trash', 'ลบไฟล์ที่เก็บไว้ (เก็บความคืบหน้า)', `คืนพื้นที่ ${fmtSize(b.size || 0)} · หน้าที่อ่าน ที่คั่น และโน้ตยังอยู่ · เปิดครั้งหน้าต้องใช้ไฟล์เดิม`, async () => {
+      if (!await confirmBox('ลบไฟล์ที่เก็บไว้?', `ไฟล์ของ "${b.title}" ในแอปจะถูกลบ แต่ความคืบหน้าและโน้ตยังอยู่ · เปิดครั้งหน้าต้องมีไฟล์เดิมในเครื่อง`, 'ลบไฟล์')) return;
+      try { await dropCopy(b); toast(`คืนพื้นที่ ${fmtSize(b.size || 0)} แล้ว`); } catch (e) { toast(e.message || 'ลบไม่สำเร็จ', 4000); }
+      renderLib();
+    }) : null,
+    isRefBook(b) ? big('download', 'เก็บสำเนาไว้ในแอป', `อ่านได้แม้ไม่มีไฟล์เดิม · ใช้พื้นที่ประมาณ ${fmtSize(b.size || 0)}`, async () => {
+      closeSheet();
+      try { busy('กำลังเก็บสำเนา…'); await keepCopy(b, pickWhileBusy('กำลังเก็บสำเนา…')); toast('เก็บสำเนาแล้ว'); }
+      catch (e) { if (e.name !== 'AbortError') toast(e.message || 'เก็บสำเนาไม่สำเร็จ', 4000); }
+      finally { busy(''); renderLib(); }
+    }) : null,
     h('button', { class: 'bigbtn', onclick: async () => {
       const t = await ask('เปลี่ยนชื่อ', { value: b.title });
       if (t && t.trim()) { b.title = t.trim(); await db.putBook(b); renderLib(); }
     } }, icon('pencil', 26), h('div', {}, h('b', {}, 'เปลี่ยนชื่อ'))),
     h('button', { class: 'bigbtn', onclick: async () => {
-      if (await confirmBox('ลบออกจากชั้นหนังสือ?', `"${b.title}" รวมถึงบุ๊กมาร์กและโน้ตของเล่มนี้จะถูกลบออกจากแอป (ไฟล์ต้นฉบับในเครื่องคุณไม่ถูกแตะต้อง)`, 'ลบ')) { await db.del(b.id); renderLib(); toast('ลบแล้ว'); }
+      if (await confirmBox('ลบออกจากชั้นหนังสือ?', `"${b.title}" รวมถึงบุ๊กมาร์กและโน้ตของเล่มนี้จะถูกลบออกจากแอป (ไฟล์ต้นฉบับในเครื่องคุณไม่ถูกแตะต้อง)`, 'ลบ')) { await db.del(b.id); forget(b.id); renderLib(); toast('ลบแล้ว'); }
     } }, icon('trash', 26), h('div', {}, h('b', {}, 'ลบออกจากชั้นหนังสือ')))));
 }
 function busy(msg) { $('#busy').hidden = !msg; $('#busy-msg').textContent = msg || ''; }
+// ถามทุกครั้งตอนนำเข้า: เก็บสำเนาไว้ในแอป หรือไม่เก็บไฟล์
+function chooseMode(files) {
+  const total = files.reduce((a, f) => a + (f.size || 0), 0);
+  const link = files.some((f) => f._h || f._root);
+  return new Promise((res) => {
+    let done = false;
+    const fin = (v) => { if (done) return; done = true; closeSheet(); res(v); };
+    const big = (ic, t, s, v) => h('button', { class: 'bigbtn', onclick: () => fin(v) }, icon(ic, 30), h('div', {}, h('b', {}, t), h('small', {}, s)));
+    openSheet(`นำเข้า ${files.length} ไฟล์ · ${fmtSize(total)}`, h('div', { class: 'col' },
+      big('download', 'เก็บสำเนาไว้ในแอป', `อ่านได้แม้ย้ายหรือลบไฟล์เดิม · ใช้พื้นที่เพิ่มประมาณ ${fmtSize(total)}`, 'copy'),
+      link
+        ? big('folder', 'ไม่เก็บไฟล์ — เปิดจากไฟล์เดิม', 'ไม่ใช้พื้นที่เพิ่ม · แอปจำตำแหน่งไฟล์ไว้ เปิดครั้งหน้าอาจต้องกดอนุญาต · ถ้าย้ายหรือลบไฟล์ ต้องเลือกใหม่', 'ref')
+        : big('folder', 'ไม่เก็บไฟล์ — เลือกไฟล์ใหม่ทุกครั้งที่เปิด', 'ไม่ใช้พื้นที่เพิ่ม · แอปจำหน้าที่อ่าน ที่คั่น และโน้ตไว้ให้', 'ref'),
+      h('p', { class: 'note' }, 'เปลี่ยนภายหลังได้จากเมนู ⋯ ของแต่ละเล่ม')), { onClose: () => fin(null) });
+  });
+}
+// เล่มที่ไม่เก็บไฟล์: ให้ผู้ใช้อนุญาตเข้าถึงไฟล์เดิม หรือเลือกไฟล์ใหม่ → { got } | { files } | null
+function pickSource(meta, retry) {
+  return new Promise((res) => {
+    let done = false;
+    const fin = (v) => { if (done) return; done = true; closeSheet(); res(v); };
+    const imgs = meta.src && meta.src.t === 'imgs';
+    const input = (attrs) => {
+      const el = document.createElement('input');
+      el.type = 'file'; el.hidden = true;
+      for (const [k, v] of Object.entries(attrs)) if (v === true) el.setAttribute(k, ''); else el.setAttribute(k, v);
+      el.addEventListener('change', () => { const f = [...el.files]; if (f.length) fin({ files: f }); });
+      return el;
+    };
+    const inFile = input(imgs ? { multiple: true, accept: 'image/*' } : {});
+    const inDir = imgs && !isIOS ? input({ webkitdirectory: true, multiple: true }) : null;
+    const big = (ic, t, s, fn) => h('button', { class: 'bigbtn', onclick: fn }, icon(ic, 30), h('div', {}, h('b', {}, t), s ? h('small', {}, s) : null));
+    const what = imgs ? `โฟลเดอร์ "${meta.src.dir || 'รูปภาพ'}" · ${meta.src.names.length} รูป` : `"${meta.src.name}" · ${fmtSize(meta.src.size || 0)}`;
+    openSheet('เปิด ' + meta.title, h('div', { class: 'col' },
+      h('p', { class: 'muted' }, retry ? 'แอปต้องขออนุญาตอ่านไฟล์เดิมในเครื่องอีกครั้ง' : 'เล่มนี้ไม่ได้เก็บไฟล์ไว้ในแอป กรุณาเลือกไฟล์เดิมอีกครั้ง'),
+      h('p', { class: 'note' }, 'ไฟล์ต้นฉบับ: ' + what),
+      retry ? big('book', 'อนุญาตและเปิด', 'เปิดจากไฟล์เดิมที่เคยเลือกไว้', async () => {
+        try { const got = await retry(); if (got) fin({ got }); }
+        catch (e) { toast(e && e.name === 'NotFoundError' ? 'ไม่พบไฟล์เดิม อาจถูกย้ายหรือลบ — กรุณาเลือกไฟล์ใหม่' : (e.message || 'เปิดไม่ได้'), 4500); }
+      }) : null,
+      imgs ? big('image', 'เลือกรูป', 'เลือกรูปทั้งหมดของอัลบั้มนี้', () => inFile.click()) : big('file', 'เลือกไฟล์', 'เลือกไฟล์เดิมจากเครื่อง', () => inFile.click()),
+      inDir ? big('folder', 'เลือกโฟลเดอร์', 'เลือกโฟลเดอร์ที่มีรูปของอัลบั้มนี้', () => inDir.click()) : null,
+      inFile, inDir), { onClose: () => fin(null) });
+  });
+}
+// ซ่อนหน้าจอ "กำลัง…" ระหว่างให้ผู้ใช้เลือกไฟล์และยืนยันการจับคู่ แล้วแสดงกลับ
+const pickWhileBusy = (msg) => async (m, retry, match) => {
+  busy('');
+  try { const ans = await pickSource(m, retry); return ans && ans.files ? { got: await match(ans.files) } : ans; }
+  finally { busy(msg); }
+};
 async function doImport(files) {
   files = [...files];
   if (!files.length) return;
   closeSheet();
+  const mode = await chooseMode(files);
+  if (!mode) return;
   busy('กำลังนำเข้า…');
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch { /* ไม่รองรับ */ }
   let res;
-  try { res = await importFiles(files, (i, n, name) => busy(`กำลังนำเข้า ${i}/${n}\n${name}`)); }
+  try { res = await importFiles(files, { mode, onProgress: (i, n, name) => busy(`กำลังนำเข้า ${i}/${n}\n${name}`) }); }
   catch (e) { res = { added: [], errors: [String(e.message || e)] }; }
   busy('');
   await renderLib();
@@ -115,11 +185,16 @@ async function doImport(files) {
 }
 function addSheet() {
   const big = (ic, t, s, fn) => h('button', { class: 'bigbtn', onclick: fn }, icon(ic, 30), h('div', {}, h('b', {}, t), h('small', {}, s)));
+  // เบราว์เซอร์ที่รองรับ File System Access API ได้ handle มาด้วย จึงเลือก "ไม่เก็บไฟล์" แล้วเปิดจากไฟล์เดิมได้
+  const viaApi = (fn) => async () => { let f; try { f = await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message || 'เลือกไฟล์ไม่สำเร็จ'); return; } doImport(f); };
+  const usage = h('p', { class: 'note' });
   openSheet('เพิ่มเข้าชั้นหนังสือ', h('div', { class: 'col' },
-    big('file', 'ไฟล์หนังสือ', 'EPUB · PDF · TXT · CBZ / CBR / ZIP / RAR / 7z', () => $('#in-files').click()),
+    big('file', 'ไฟล์หนังสือ', 'EPUB · PDF · TXT · CBZ / CBR / ZIP / RAR / 7z', canPickFiles ? viaApi(pickFiles) : () => $('#in-files').click()),
     big('image', 'รูปภาพหลายรูป', 'เลือกหลายรูปพร้อมกัน รวมเป็นหนึ่งอัลบั้ม', () => $('#in-images').click()),
-    isIOS ? null : big('folder', 'ทั้งโฟลเดอร์', 'แต่ละโฟลเดอร์ย่อยที่มีรูปจะกลายเป็นหนึ่งเล่ม', () => $('#in-folder').click()),
-    h('p', { class: 'note' }, 'ไฟล์ทั้งหมดเก็บอยู่ในเครื่องนี้เท่านั้น · ไฟล์ที่ติดระบบป้องกันการคัดลอก (DRM) จากร้านหนังสือจะเปิดไม่ได้')));
+    isIOS ? null : big('folder', 'ทั้งโฟลเดอร์', 'แต่ละโฟลเดอร์ย่อยที่มีรูปจะกลายเป็นหนึ่งเล่ม', canPickDir ? viaApi(pickFolder) : () => $('#in-folder').click()),
+    h('p', { class: 'note' }, 'ทุกครั้งที่นำเข้า เลือกได้ว่าจะเก็บสำเนาไว้ในแอปหรือไม่ · ไฟล์ไม่ถูกส่งออกจากเครื่อง · ไฟล์ที่ติดระบบป้องกันการคัดลอก (DRM) จากร้านหนังสือจะเปิดไม่ได้'),
+    usage));
+  try { navigator.storage.estimate().then((e) => { usage.textContent = `ข้อมูลของแอปใช้พื้นที่ในเครื่องอยู่ ${fmtSize(e.usage || 0)}`; }).catch(() => {}); } catch { /* ไม่รองรับ */ }
 }
 for (const id of ['in-files', 'in-images', 'in-folder']) $('#' + id).addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; doImport(f); });
 $('#btn-add').prepend(icon('plus', 18)); $('#btn-add').onclick = addSheet; $('#btn-add2').onclick = addSheet;
@@ -140,7 +215,7 @@ async function openBook(id) {
     const meta = await db.book(id);
     if (!meta) throw new Error('ไม่พบเล่มนี้');
     meta.view = meta.view || {}; meta.bookmarks = meta.bookmarks || []; meta.highlights = meta.highlights || [];
-    const src = await openSource(meta);
+    const src = await openSource(meta, pickWhileBusy('กำลังเปิด…'));
     app.meta = meta;
     const fixed = src.kind === 'pdf' || src.kind === 'img';
     reader.dataset.kind = fixed ? 'fixed' : 'reflow';
@@ -164,6 +239,7 @@ async function openBook(id) {
       if (!localStorage.getItem('eazyreader.hint')) { localStorage.setItem('eazyreader.hint', '1'); setTimeout(() => toast('ปัดหรือแตะขอบซ้าย–ขวาเพื่อพลิกหน้า · แตะกลางจอเพื่อเปิดเมนู', 5200), 900); }
     } catch { /* โหมดส่วนตัว */ }
   } catch (e) {
+    if (e && e.name === 'AbortError') { teardown(); return; }
     console.error(e);
     toast('เปิดไม่ได้: ' + (e.message || e), 5000);
     teardown();
@@ -546,7 +622,7 @@ function openGrid(manage = false, sel = -1) {
 async function reopen(pos) {
   const m = app.meta;
   try { app.view.destroy(); } catch { /* ปิดแล้ว */ }
-  const src = await openSource(m);
+  const src = await openSource(m, pickWhileBusy('กำลังเปิด…'));
   app.view = new FixedView(app, m, src);
   app.pager.setView(app.view);
   outlineCache = null;
@@ -559,8 +635,11 @@ $('#in-merge').addEventListener('change', async (e) => {
   busy('กำลังรวมไฟล์…');
   try {
     const marks = m.bookmarks.map((b) => v.bookmarkIndex(b));
-    const out = await rebuildPdf(m, await db.file(m.id), { flatten: false, extra: files });
+    const out = await rebuildPdf(m, await bookFile(m, pickWhileBusy('กำลังรวมไฟล์…')), { flatten: false, extra: files });
+    // ไฟล์ที่รวมแล้วไม่มีอยู่ในเครื่อง จึงต้องเก็บสำเนาไว้ในแอปเสมอ
     await db.putFile(m.id, out.blob);
+    if (isRefBook(m)) { m.store = 'copy'; forget(m.id); toast('เล่มนี้เก็บสำเนาไว้ในแอปแล้ว เพราะไฟล์ที่รวมไม่มีอยู่ในเครื่อง', 4000); }
+    await db.delHandle(m.id); m.merged = true;
     m.pdf.order = out.order; m.pdf.annots = out.annots; m.size = out.blob.size; m.n = out.order.length;
     { const kept = []; m.bookmarks.forEach((b, i) => { if (marks[i] >= 0) kept.push({ ...b, pos: { p: marks[i], s: marks[i] } }); }); m.bookmarks = kept; }
     const pos = v.getPos();
@@ -574,12 +653,12 @@ $('#in-merge').addEventListener('change', async (e) => {
 });
 function exportSheet() {
   const m = app.meta;
-  const make = async () => { busy('กำลังสร้างไฟล์ PDF…'); try { return (await rebuildPdf(m, await db.file(m.id), { flatten: true })).blob; } finally { busy(''); } };
+  const make = async () => { busy('กำลังสร้างไฟล์ PDF…'); try { return (await rebuildPdf(m, await bookFile(m, pickWhileBusy('กำลังสร้างไฟล์ PDF…')), { flatten: true })).blob; } finally { busy(''); } };
   const name = m.title.replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) + ' (แก้ไข).pdf';
   const big = (ic, t, s, fn) => h('button', { class: 'bigbtn', onclick: async () => { closeSheet(); try { await fn(); } catch (e) { console.error(e); toast(e.message || 'ส่งออกไม่สำเร็จ', 4500); } } }, icon(ic, 30), h('div', {}, h('b', {}, t), h('small', {}, s)));
   openSheet('ส่งออก PDF ที่แก้ไขแล้ว', h('div', { class: 'col' },
     big('share', 'บันทึก / แชร์ไฟล์', 'ได้ไฟล์ PDF ใหม่ที่รวมลายขีดเขียน การหมุน และลำดับหน้าปัจจุบัน', async () => saveBlob(await make(), name)),
-    big('book', 'เก็บเป็นเล่มใหม่ในชั้นหนังสือ', 'เล่มเดิมยังอยู่และแก้ต่อได้', async () => { const b = await make(); busy('กำลังบันทึก…'); try { await importFiles([new File([b], name, { type: 'application/pdf' })]); } finally { busy(''); } toast('เพิ่มเล่มใหม่ในชั้นหนังสือแล้ว'); }),
+    big('book', 'เก็บเป็นเล่มใหม่ในชั้นหนังสือ', 'เล่มเดิมยังอยู่และแก้ต่อได้', async () => { const b = await make(); busy('กำลังบันทึก…'); try { await importFiles([new File([b], name, { type: 'application/pdf' })], { mode: 'copy' }); } finally { busy(''); } toast('เพิ่มเล่มใหม่ในชั้นหนังสือแล้ว'); }),
     h('p', { class: 'note' }, 'ไฟล์ต้นฉบับในเครื่องคุณจะไม่ถูกแก้ไข')));
 }
 

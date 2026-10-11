@@ -1,13 +1,15 @@
-// ที่เก็บข้อมูลในเครื่อง (IndexedDB): books = ข้อมูลเล่ม, files = ไฟล์ต้นฉบับ, pages = รูปทีละหน้าของอัลบั้ม
+// ที่เก็บข้อมูลในเครื่อง (IndexedDB): books = ข้อมูลเล่ม, files = ไฟล์ต้นฉบับ, pages = รูปทีละหน้าของอัลบั้ม,
+// handles = ลิงก์ไปยังไฟล์/โฟลเดอร์เดิมในเครื่อง (File System Access API) ของเล่มที่ไม่เก็บสำเนา
 let dbp;
 function open() {
   return dbp || (dbp = new Promise((res, rej) => {
-    const r = indexedDB.open('eazyreader', 1);
+    const r = indexedDB.open('eazyreader', 2);
     r.onupgradeneeded = () => {
-      const d = r.result;
-      d.createObjectStore('books', { keyPath: 'id' });
-      d.createObjectStore('files');
-      d.createObjectStore('pages');
+      const d = r.result, has = (n) => d.objectStoreNames.contains(n);
+      if (!has('books')) d.createObjectStore('books', { keyPath: 'id' });
+      if (!has('files')) d.createObjectStore('files');
+      if (!has('pages')) d.createObjectStore('pages');
+      if (!has('handles')) d.createObjectStore('handles');
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -41,10 +43,18 @@ export const db = {
   file: async (id) => toBlob(await tx('files', 'readonly', (s) => s.get(id))),
   putPage: (id, i, blob) => putBlob('pages', [id, i], blob),
   page: async (id, i) => toBlob(await tx('pages', 'readonly', (s) => s.get([id, i]))),
+  putHandle: (id, v) => tx('handles', 'readwrite', (s) => s.put(v, id)),
+  handle: (id) => tx('handles', 'readonly', (s) => s.get(id)),
+  delHandle: (id) => tx('handles', 'readwrite', (s) => s.delete(id)),
   async del(id) {
     await tx('books', 'readwrite', (s) => s.delete(id));
+    await this.delData(id);
+    await this.delHandle(id);
+  },
+  // ลบเฉพาะไฟล์ที่เก็บสำเนาไว้ (ข้อมูลเล่ม ความคืบหน้า โน้ต ยังอยู่)
+  async delData(id) {
     await tx('files', 'readwrite', (s) => s.delete(id));
-    await tx('pages', 'readwrite', (s) => s.delete(IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER])));
+    await this.delPages(id);
   },
   async delPages(id) {
     await tx('pages', 'readwrite', (s) => s.delete(IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER])));
